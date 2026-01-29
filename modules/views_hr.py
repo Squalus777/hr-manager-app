@@ -4,7 +4,7 @@ import plotly.express as px
 import time
 from datetime import datetime, date
 
-from modules.database import get_connection, get_active_period_info
+from modules.database import get_connection, get_active_period_info, DB_FILE
 from modules.utils import get_df_from_json
 
 def render_hr_view():
@@ -25,39 +25,43 @@ def render_hr_view():
         search_all = st.selectbox("Pretraži SVE zaposlenike:", ["Odaberi..."] + m['ime_prezime'].tolist())
         
         if search_all != "Odaberi...":
-            kid = m[m['ime_prezime'] == search_all]['kadrovski_broj'].values[0]
-            
-            # 1. Povijest grafa (Snail Trail)
-            h_graph = pd.read_sql_query("SELECT period, avg_performance, avg_potential FROM evaluations WHERE kadrovski_broj=? ORDER BY period", conn, params=(kid,))
-            if not h_graph.empty:
-                fig = px.line(h_graph, x='avg_performance', y='avg_potential', markers=True, text='period', title="Kretanje kroz 9-Box matricu", range_x=[0.5,5.5], range_y=[0.5,5.5])
-                fig.add_hline(y=3.0, line_dash="dot"); fig.add_vline(x=3.0, line_dash="dot"); fig.add_hline(y=4.0, line_dash="dot"); fig.add_vline(x=4.0, line_dash="dot")
-                st.plotly_chart(fig, use_container_width=True)
+            try:
+                kid = m[m['ime_prezime'] == search_all]['kadrovski_broj'].values[0]
+                
+                # 1. Povijest grafa
+                h_graph = pd.read_sql_query("SELECT period, avg_performance, avg_potential FROM evaluations WHERE kadrovski_broj=? ORDER BY period", conn, params=(kid,))
+                if not h_graph.empty:
+                    fig = px.line(h_graph, x='avg_performance', y='avg_potential', markers=True, text='period', title="Kretanje kroz 9-Box matricu", range_x=[0.5,5.5], range_y=[0.5,5.5])
+                    fig.add_hline(y=3.0, line_dash="dot"); fig.add_vline(x=3.0, line_dash="dot"); fig.add_hline(y=4.0, line_dash="dot"); fig.add_vline(x=4.0, line_dash="dot")
+                    st.plotly_chart(fig, use_container_width=True)
 
-            # 2. Povijest IDP-ova
-            st.markdown("#### 📜 Povijest Razvojnih Planova")
-            hist_idp_full = pd.read_sql_query("SELECT * FROM development_plans WHERE kadrovski_broj=? ORDER BY period DESC", conn, params=(kid,))
-            
-            if not hist_idp_full.empty:
-                for _, row_idp in hist_idp_full.iterrows():
-                    with st.expander(f"📅 {row_idp['period']} | Voditelj: {row_idp['manager_id']}"):
-                        st.markdown(f"**Cilj:** {row_idp['career_goal']}")
-                        st.markdown(f"**Snage:** {row_idp['strengths']}")
-                        st.markdown(f"**Razvoj:** {row_idp['areas_improve']}")
-                        st.markdown("---")
-                        st.caption("Plan 70-20-10:")
-                        st.table(get_df_from_json(row_idp['json_70'], ["Aktivnost", "Rok", "Dokaz"]))
-                        st.table(get_df_from_json(row_idp['json_20'], ["Aktivnost", "Rok"]))
-                        st.table(get_df_from_json(row_idp['json_10'], ["Edukacija", "Trošak"]))
-                        st.markdown(f"**Podrška:** {row_idp['support_needed']}")
-            else:
-                st.info("Nema povijesti IDP-a.")
+                # 2. Povijest IDP-ova
+                st.markdown("#### 📜 Povijest Razvojnih Planova")
+                hist_idp_full = pd.read_sql_query("SELECT * FROM development_plans WHERE kadrovski_broj=? ORDER BY period DESC", conn, params=(kid,))
+                
+                if not hist_idp_full.empty:
+                    for _, row_idp in hist_idp_full.iterrows():
+                        with st.expander(f"📅 {row_idp['period']} | Voditelj: {row_idp['manager_id']}"):
+                            st.markdown(f"**Cilj:** {row_idp['career_goal']}")
+                            st.markdown(f"**Snage:** {row_idp['strengths']}")
+                            st.markdown(f"**Razvoj:** {row_idp['areas_improve']}")
+                            st.markdown("---")
+                            st.caption("Plan 70-20-10:")
+                            st.table(get_df_from_json(row_idp['json_70'], ["Aktivnost", "Rok", "Dokaz"]))
+                            st.table(get_df_from_json(row_idp['json_20'], ["Aktivnost", "Rok"]))
+                            st.table(get_df_from_json(row_idp['json_10'], ["Edukacija", "Trošak"]))
+                            st.markdown(f"**Podrška:** {row_idp['support_needed']}")
+                else:
+                    st.info("Nema povijesti IDP-a.")
+            except Exception as e:
+                st.error(f"Greška pri dohvaćanju povijesti: {e}")
         
         st.markdown("---")
         
         # FILTERI
         c1, c2 = st.columns(2)
-        dept = c1.selectbox("Odjel:", ["Svi"] + sorted(m['department'].dropna().unique().tolist()))
+        dept_list = sorted(m['department'].dropna().unique().tolist())
+        dept = c1.selectbox("Odjel:", ["Svi"] + dept_list)
         if dept != "Svi": df = df[df['department'] == dept]
 
         t1, t2, t3 = st.tabs(["Pregled", "Status po Managerima", "Grafovi"])
@@ -84,41 +88,64 @@ def render_hr_view():
             
         with t3:
             st.markdown("### Usporedba Odjela")
-            dept_stats = df.groupby('department')[['avg_performance', 'avg_potential']].mean().reset_index()
-            if not dept_stats.empty:
-                fig_bar = px.bar(dept_stats, x='department', y=['avg_performance', 'avg_potential'], barmode='group')
-                st.plotly_chart(fig_bar, use_container_width=True)
+            if not df.empty:
+                dept_stats = df.groupby('department')[['avg_performance', 'avg_potential']].mean().reset_index()
+                if not dept_stats.empty:
+                    fig_bar = px.bar(dept_stats, x='department', y=['avg_performance', 'avg_potential'], barmode='group')
+                    st.plotly_chart(fig_bar, use_container_width=True)
+            
             st.markdown("### Kvartalni Trendovi")
             trend_data = pd.read_sql_query("SELECT period, avg(avg_performance) as perf, avg(avg_potential) as pot FROM evaluations GROUP BY period ORDER BY period", conn)
             if not trend_data.empty:
                 fig_trend = px.line(trend_data, x='period', y=['perf', 'pot'], markers=True)
                 st.plotly_chart(fig_trend, use_container_width=True)
 
-    # --- 2. CILJEVI ---
+    # --- 2. CILJEVI (POPRAVLJENO - PRIKAZ KPI-jeva) ---
     elif menu == "🎯 Upravljanje Ciljevima":
-        st.header(f"🎯 Pregled Ciljeva")
+        st.header(f"🎯 Pregled Ciljeva i KPI")
         m = pd.read_sql_query("SELECT * FROM employees_master", conn)
-        d = st.selectbox("Filtriraj po odjelu:", ["Svi"] + sorted(m['department'].dropna().unique().tolist()))
+        dept_list = sorted(m['department'].dropna().unique().tolist())
+        d = st.selectbox("Filtriraj po odjelu:", ["Svi"] + dept_list)
+        
         q_l = "SELECT DISTINCT g.kadrovski_broj, m.ime_prezime FROM goals g JOIN employees_master m ON g.kadrovski_broj=m.kadrovski_broj WHERE g.period=?"
         params = [current_period]
-        if d != "Svi": q_l += " AND m.department=?"; params.append(d)
+        if d != "Svi": 
+            q_l += " AND m.department=?"
+            params.append(d)
+            
         emps = pd.read_sql_query(q_l, conn, params=params)
+        
+        if emps.empty:
+            st.info("Nema ciljeva za odabrani kriterij.")
+        
         for _, r in emps.iterrows():
             eid = r['kadrovski_broj']
             goals = pd.read_sql_query("SELECT * FROM goals WHERE kadrovski_broj=? AND period=?", conn, params=(eid, current_period))
-            with st.expander(f"👤 {r['ime_prezime']}"):
+            
+            with st.expander(f"👤 {r['ime_prezime']} (Ciljeva: {len(goals)})"):
                 for _, g in goals.iterrows():
-                    st.write(f"**{g['title']}** ({g['weight']}%) - {g['status']}")
+                    st.markdown(f"#### 🚩 {g['title']} ({g['weight']}%)")
+                    st.caption(f"Status: **{g['status']}** | Rok: {g['deadline']}")
+                    st.write(f"Opis: {g['description']}")
+                    
+                    # --- OVO JE DIO KOJI JE NEDOSTAJAO ---
+                    kpis = pd.read_sql_query("SELECT description as 'KPI', weight as 'Težina', progress as 'Ostvarenje %', deadline as 'Rok' FROM goal_kpis WHERE goal_id=?", conn, params=(g['id'],))
+                    
+                    if not kpis.empty:
+                        st.dataframe(kpis, hide_index=True, use_container_width=True)
+                    else:
+                        st.caption("Nema definiranih KPI-jeva.")
+                    
+                    st.divider()
 
-    # --- 3. IDP PREGLED (POBOLJŠANI DETALJNI PRIKAZ) ---
+    # --- 3. IDP PREGLED ---
     elif menu == "🚀 Razvojni Planovi":
         st.header("🚀 Pregled IDP-a po Odjelima")
         m = pd.read_sql_query("SELECT * FROM employees_master", conn)
         
-        # Filter odjela
-        d = st.selectbox("Odaberi odjel:", ["Svi"] + sorted(m['department'].dropna().unique().tolist()))
+        dept_list = sorted(m['department'].dropna().unique().tolist())
+        d = st.selectbox("Odaberi odjel:", ["Svi"] + dept_list)
         
-        # Filtriraj zaposlenike
         filtered_emps = m if d == "Svi" else m[m['department'] == d]
         
         st.markdown(f"Prikazano: **{len(filtered_emps)}** zaposlenika")
@@ -128,7 +155,7 @@ def render_hr_view():
             kid = emp['kadrovski_broj']
             idp = pd.read_sql_query("SELECT * FROM development_plans WHERE kadrovski_broj=? AND period=?", conn, params=(kid, current_period))
             
-            # Status logika i podaci
+            row_idp = None
             if not idp.empty:
                 status_icon = "✅"
                 row_idp = idp.iloc[0]
@@ -140,9 +167,8 @@ def render_hr_view():
             else:
                 status_icon = "⚠️"
             
-            # GLAVNI EXPANDER
             with st.expander(f"{status_icon} {emp['ime_prezime']} | {emp['radno_mjesto']}"):
-                if not idp.empty:
+                if row_idp is not None:
                     st.caption(f"Voditelj: {row_idp['manager_id']} | Kreirano: {current_period}")
                     
                     st.markdown("### 1. Dijagnoza i Cilj")
@@ -181,61 +207,113 @@ def render_hr_view():
                     
                 else:
                     st.warning(f"Zaposlenik {emp['ime_prezime']} nema definiran IDP za period {current_period}.")
-                    st.caption("Kontaktirajte voditelja (" + emp['manager_id'] + ") da ispuni plan.")
 
     # --- 4. ŠIFARNIK ---
     elif menu == "🗂️ Šifarnik Zaposlenika":
         st.header("🗂️ Šifarnik")
         t1, t2, t3 = st.tabs(["Pregled", "Ručni Unos", "Import Excel"])
-        mgrs = pd.read_sql_query("SELECT username FROM users WHERE role='Manager'", conn)['username'].tolist()
+        
+        # Siguran dohvat managera
+        try:
+            mgrs = pd.read_sql_query("SELECT username FROM users WHERE role='Manager'", conn)['username'].tolist()
+        except:
+            mgrs = []
+            
         with t1:
             df = pd.read_sql_query("SELECT * FROM employees_master", conn)
             ed = st.data_editor(df, key="sf_e", num_rows="dynamic", column_config={"kadrovski_broj": st.column_config.TextColumn(disabled=True), "manager_id": st.column_config.SelectboxColumn(options=mgrs)})
             if st.button("Spremi promjene"):
                 c = conn.cursor()
-                for _, r in ed.iterrows(): c.execute("UPDATE employees_master SET ime_prezime=?, radno_mjesto=?, department=?, manager_id=? WHERE kadrovski_broj=?", (r['ime_prezime'], r['radno_mjesto'], r['department'], r['manager_id'], r['kadrovski_broj']))
-                conn.commit(); st.success("Spremljeno!")
+                for _, r in ed.iterrows(): 
+                    c.execute("UPDATE employees_master SET ime_prezime=?, radno_mjesto=?, department=?, manager_id=? WHERE kadrovski_broj=?", (r['ime_prezime'], r['radno_mjesto'], r['department'], r['manager_id'], r['kadrovski_broj']))
+                conn.commit()
+                st.success("Spremljeno!")
+        
         with t2:
             with st.form("hr_add"):
                 i = st.text_input("ID"); n = st.text_input("Ime"); r = st.text_input("Pozicija"); d = st.text_input("Odjel"); m = st.selectbox("Manager", [""]+mgrs)
                 if st.form_submit_button("Dodaj"): 
-                    try: conn.cursor().execute("INSERT INTO employees_master VALUES (?,?,?,?,?)", (i,n,r,d,m)); conn.commit(); st.success("OK")
-                    except: st.error("Greška")
+                    try: 
+                        conn.cursor().execute("INSERT INTO employees_master VALUES (?,?,?,?,?)", (i,n,r,d,m))
+                        conn.commit()
+                        st.success("OK")
+                    except Exception as e: 
+                        st.error(f"Greška: {e}")
+        
         with t3:
             f = st.file_uploader("Excel", type="xlsx")
             if f and st.button("Import"):
-                df = pd.read_excel(f)
-                c = conn.cursor()
-                for _, r in df.iterrows(): c.execute("INSERT OR REPLACE INTO employees_master VALUES (?,?,?,?,?)", (str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]) if len(r)>4 else None))
-                conn.commit(); st.success("OK")
+                try:
+                    df = pd.read_excel(f)
+                    c = conn.cursor()
+                    for _, r in df.iterrows(): 
+                        val4 = str(r[4]) if len(r)>4 else None
+                        c.execute("INSERT OR REPLACE INTO employees_master VALUES (?,?,?,?,?)", (str(r[0]), str(r[1]), str(r[2]), str(r[3]), val4))
+                    conn.commit()
+                    st.success("OK")
+                except Exception as e:
+                    st.error(f"Greška kod importa: {e}")
 
+    # --- 5. POSTAVKE RAZDOBLJA ---
     elif menu == "⚙️ Postavke Razdoblja":
         st.header("🗓️ Postavke Razdoblja")
         t1, t2, t3 = st.tabs(["1. KREIRAJ NOVO", "2. UPRAVLJANJE", "3. UREDI ROK"])
+        
         with t1:
             with st.form("np"):
                 n = st.text_input("Naziv"); d = st.date_input("Rok")
-                if st.form_submit_button("Kreiraj"): conn.cursor().execute("INSERT INTO periods VALUES (?,?)", (n, str(d))); conn.commit(); st.success("Kreirano")
+                if st.form_submit_button("Kreiraj"): 
+                    try:
+                        conn.cursor().execute("INSERT INTO periods VALUES (?,?)", (n, str(d)))
+                        conn.commit()
+                        st.success("Kreirano")
+                    except Exception as e:
+                        st.error(f"Greška (vjerojatno naziv već postoji): {e}")
+        
         with t2:
-            ps = [x[0] for x in conn.cursor().execute("SELECT period_name FROM periods").fetchall()]
-            if ps:
-                s = st.selectbox("Aktiviraj:", ps, index=ps.index(current_period) if current_period in ps else 0)
-                if st.button("Postavi kao AKTIVNO"): conn.cursor().execute("UPDATE app_settings SET setting_value=? WHERE setting_key='active_period'", (s,)); conn.commit(); st.rerun()
+            try:
+                ps = [x[0] for x in conn.cursor().execute("SELECT period_name FROM periods").fetchall()]
+                if ps:
+                    s = st.selectbox("Aktiviraj:", ps, index=ps.index(current_period) if current_period in ps else 0)
+                    if st.button("Postavi kao AKTIVNO"): 
+                        conn.cursor().execute("UPDATE app_settings SET setting_value=? WHERE setting_key='active_period'", (s,))
+                        conn.commit()
+                        st.rerun()
+                else:
+                    st.info("Nema definiranih perioda.")
+            except Exception as e:
+                st.error(f"Greška tablice periods: {e}")
+
         with t3:
             if current_period:
-                curr_dl = conn.cursor().execute("SELECT deadline FROM periods WHERE period_name=?", (current_period,)).fetchone()
-                nd = st.date_input("Novi rok za " + current_period, value=datetime.strptime(curr_dl[0], "%Y-%m-%d").date() if curr_dl else date.today())
-                if st.button("Ažuriraj Rok"): conn.cursor().execute("UPDATE periods SET deadline=? WHERE period_name=?", (str(nd), current_period)); conn.commit(); st.success("Ažurirano!")
+                try:
+                    curr_dl = conn.cursor().execute("SELECT deadline FROM periods WHERE period_name=?", (current_period,)).fetchone()
+                    nd = st.date_input("Novi rok za " + current_period, value=datetime.strptime(curr_dl[0], "%Y-%m-%d").date() if curr_dl else date.today())
+                    if st.button("Ažuriraj Rok"): 
+                        conn.cursor().execute("UPDATE periods SET deadline=? WHERE period_name=?", (str(nd), current_period))
+                        conn.commit()
+                        st.success("Ažurirano!")
+                except Exception as e:
+                    st.error(f"Greška: {e}")
 
+    # --- 6. ADMIN PANEL ---
     elif menu == "🛠️ Admin Panel":
-        from modules.views_admin import render_admin_view
-        render_admin_view()
+        try:
+            from modules.views_admin import render_admin_view
+            render_admin_view()
+        except ImportError:
+            st.error("Admin modul nije pronađen.")
 
+    # --- 7. EXPORT ---
     elif menu == "📥 Export Podataka":
         st.header("Export")
         if st.button("Excel"):
             import io
-            o = io.BytesIO()
-            with pd.ExcelWriter(o, engine='xlsxwriter') as w:
-                for t in ["evaluations", "goals", "development_plans", "employees_master"]: pd.read_sql_query(f"SELECT * FROM {t}", conn).to_excel(w, sheet_name=t)
-            st.download_button("Download", o.getvalue(), "export.xlsx")
+            try:
+                o = io.BytesIO()
+                with pd.ExcelWriter(o, engine='xlsxwriter') as w:
+                    for t in ["evaluations", "goals", "development_plans", "employees_master"]: 
+                        pd.read_sql_query(f"SELECT * FROM {t}", conn).to_excel(w, sheet_name=t)
+                st.download_button("Download", o.getvalue(), "export.xlsx")
+            except Exception as e:
+                st.error(f"Greška pri exportu: {e}")
