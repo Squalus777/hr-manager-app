@@ -84,3 +84,5 @@ o	Stupci: A=ID, B=Ime, C=Pozicija, D=Odjel, E=ManagerID, F=Rola (Employee/Manage
 Q: Manager mi je unio ocjene, ali ništa ne vidim? A: Manager mora kliknuti crveni gumb "ZAKLJUČAJ I POŠALJI". Dok je procjena u statusu "Nacrt", ona je tajna.
 Q: Zašto ne vidim Managere u popisu zaposlenika? A: Vjerojatno su kreirani samo kao korisnici (za login), ali nisu uneseni u Excel/Matičnu knjigu. HR ih treba dodati kroz "Dodaj novog zaposlenika" koristeći isti ID.
 Q: Aplikacija javlja grešku nakon importa Excela. A: Provjerite ima li Excel praznih redova ili zaglavlja (npr. tekst "ID" u stupcu za broj). U Admin panelu postoji alat "Popravi Import" za brisanje takvih grešaka.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
