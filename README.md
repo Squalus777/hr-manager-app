@@ -1,5 +1,6 @@
 Tommy Talent – Upute za Korištenje i Testiranje
 Dobrodošli u testnu fazu aplikacije Tommy Talent. Ovaj dokument sadrži važne napomene o testnom okruženju, upute za svaku ulogu (Zaposlenik, Manager, HR) te scenarij za testiranje.
+
 **⚠️ VAŽNA NAPOMENA ZA TESTERE (Obavezno pročitati!)**
 Budući da se aplikacija vrti na testnom serveru (Cloud), vrijede sljedeća pravila:
 1.	Privremena Baza: Baza podataka se resetira (briše) ako se aplikacija ne koristi dulje od 30 minuta ili ako se dogodi novo ažuriranje koda.
