@@ -1,3 +1,4 @@
+> ⚠️ **Notice:** This project is for **Non-Commercial Use Only**.
 Tommy Talent – Upute za Korištenje i Testiranje
 Dobrodošli u testnu fazu aplikacije Tommy Talent. 
 Ovaj dokument sadrži važne napomene o testnom okruženju, upute za svaku ulogu (Zaposlenik, Manager, HR) te scenarij za testiranje.
